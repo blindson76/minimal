@@ -27,9 +27,17 @@ if [ "$USE_PREDEFINED_KERNEL_CONFIG" = "true" ] ; then
   echo "Using config file '$SRC_DIR/minimal_config/kernel.config'."
   cp -f $SRC_DIR/minimal_config/kernel.config .config
 else
+
+
+
   # Create default configuration file for the kernel.
   make defconfig -j $NUM_JOBS
   echo "Generated default kernel configuration."
+
+  # Enable fuse
+  sed -i "s/.*CONFIG_FUSE_FS*/CONFIG_FUSE_FS=y/" .config
+  echo "CONFIG_CUSE=n" >> .config
+  echo "CONFIG_VIRTIO_FS=n" >> .config
 
   # Changes the name of the system to 'minimal'.
   sed -i "s/.*CONFIG_DEFAULT_HOSTNAME.*/CONFIG_DEFAULT_HOSTNAME=\"minimal\"/" .config
