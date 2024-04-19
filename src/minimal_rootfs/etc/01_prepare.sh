@@ -25,7 +25,7 @@
 #                    +--(2) /bin/sh (Alt + F4)
 
 dmesg -n 1
-echo "Most kernel messages have been suppressed."
+#echo "Most kernel messages have been suppressed."
 
 mount -t devtmpfs none /dev
 mount -t proc none /proc
@@ -36,5 +36,5 @@ mkdir -p /dev/pts
 
 mount -t devpts none /dev/pts
 
-echo "Mounted all core filesystems. Ready to continue."
+#echo "Mounted all core filesystems. Ready to continue."
 
