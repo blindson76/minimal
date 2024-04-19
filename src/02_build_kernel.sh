@@ -60,6 +60,75 @@ else
 
   # OVERLAYFS - END
 
+  # Тurn on metadata only copy up feature by default (4.19+).
+  echo "CONFIG_OVERLAY_FS_DEBUG=y" >> .config
+
+  sed -i "s/.*CONFIG_NTFS_FS.*/CONFIG_NTFS_FS=y/" .config
+  echo "CONFIG_NTFS_DEBUG=n" >> .config
+  echo "CONFIG_NTFS_RW=y" >> .config
+  sed -i "s/.*CONFIG_NTFS3_FS.*/CONFIG_NTFS3_FS=y/" .config
+  echo "CONFIG_NTFS3_64BIT_CLUSTER=n" >> .config
+  echo "CONFIG_NTFS3_LZX_XPRESS=y" >> .config
+  echo "CONFIG_NTFS3_FS_POSIX_ACL=n" >> .config
+
+  sed -i "s/.*CONFIG_FB.*/CONFIG_FB=y/" .config
+  echo "CONFIG_FB_EFI=y" >> .config
+  echo "CONFIG_FB_VESA=y" >> .config
+  # Required settings when using FB
+  echo "CONFIG_FRAMEBUFFER_CONSOLE=y" >> .config
+  echo "CONFIG_FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION=y" >> .config
+  echo "CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y" >> .config
+  echo "CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=n" >> .config
+  echo "CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER=n" >> .config
+  echo "CONFIG_LOGO=n" >> .config
+  echo "CONFIG_FONTS=n" >> .config  
+  echo "CONFIG_DRM_FBDEV_EMULATION=n" >> .config
+  echo "CONFIG_FIRMWARE_EDID=n" >> .config
+  echo "CONFIG_FB_FOREIGN_ENDIAN=n" >> .config
+  echo "CONFIG_FB_MODE_HELPERS=n" >> .config
+  echo "CONFIG_FB_TILEBLITTING=n" >> .config
+  echo "CONFIG_FB_CIRRUS=n" >> .config
+  echo "CONFIG_FB_PM2=n" >> .config
+  echo "CONFIG_FB_CYBER2000=n" >> .config
+  echo "CONFIG_FB_ARC=n" >> .config
+  echo "CONFIG_FB_ASILIANT=n" >> .config
+  echo "CONFIG_FB_IMSTT=n" >> .config
+  echo "CONFIG_FB_VGA16=n" >> .config
+  echo "CONFIG_FB_UVESA=n" >> .config
+  echo "CONFIG_FB_N411=n" >> .config
+  echo "CONFIG_FB_HGA=n" >> .config
+  echo "CONFIG_FB_OPENCORES=n" >> .config
+  echo "CONFIG_FB_S1D13XXX=n" >> .config
+  echo "CONFIG_FB_NVIDIA=n" >> .config
+  echo "CONFIG_FB_RIVA=n" >> .config
+  echo "CONFIG_FB_I740=n" >> .config
+  echo "CONFIG_FB_LE80578=n" >> .config
+  echo "CONFIG_FB_MATROX=n" >> .config
+  echo "CONFIG_FB_RADEON=n" >> .config
+  echo "CONFIG_FB_ATY128=n" >> .config
+  echo "CONFIG_FB_ATY=n" >> .config
+  echo "CONFIG_FB_S3=n" >> .config
+  echo "CONFIG_FB_SAVAGE=n" >> .config
+  echo "CONFIG_FB_SIS=n" >> .config
+  echo "CONFIG_FB_NEOMAGIC=n" >> .config
+  echo "CONFIG_FB_KYRO=n" >> .config
+  echo "CONFIG_FB_3DFX=n" >> .config
+  echo "CONFIG_FB_VOODOO1=n" >> .config
+  echo "CONFIG_FB_VT8623=n" >> .config
+  echo "CONFIG_FB_TRIDENT=n" >> .config
+  echo "CONFIG_FB_ARK=n" >> .config
+  echo "CONFIG_FB_PM3=n" >> .config
+  echo "CONFIG_FB_CARMINE=n" >> .config
+  echo "CONFIG_FB_SMSCUFX=n" >> .config
+  echo "CONFIG_FB_UDL=n" >> .config
+  echo "CONFIG_FB_IBM_GXT4500=n" >> .config
+  echo "CONFIG_FB_VIRTUAL=n" >> .config
+  echo "CONFIG_FB_METRONOME=n" >> .config
+  echo "CONFIG_FB_MB862XX=n" >> .config
+  echo "CONFIG_FB_SIMPLE=n" >> .config
+  echo "CONFIG_FB_SM712=n" >> .config
+  echo "CONFIG_FB_DEVICE=y" >> .config
+
   # Step 1 - disable all active kernel compression options (should be only one).
   sed -i "s/.*\\(CONFIG_KERNEL_.*\\)=y/\\#\\ \\1 is not set/" .config
 

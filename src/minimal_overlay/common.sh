@@ -16,7 +16,7 @@ export BUNDLE_NAME=`basename $SRC_DIR`
 export DEST_DIR=$WORK_DIR/overlay/$BUNDLE_NAME/${BUNDLE_NAME}_installed
 export CONFIG=$MAIN_SRC_DIR/.config
 export SYSROOT=$WORK_DIR/sysroot
-
+export TMP_ROOTFS=$WORK_DIR/tmp_rootfs
 # This function reads property from the main '.config' file.
 # If there is local '.config' file in the current directory
 # the property value is overridden with the value found in

@@ -23,7 +23,7 @@ else
   ARCH="i386"
 fi
 
-cmd="qemu-system-$ARCH -pflash $OVMF_LOCATION -m 128M -cdrom minimal_linux_live.iso -boot d -vga std"
+cmd="qemu-system-$ARCH -pflash $OVMF_LOCATION -m 512M -cdrom minimal_linux_live.iso -boot d -vga std -hdd /media/sf_work/disk.vhd"
 
 if [ "$1" = "-hdd" -o "$1" = "-h" ] ; then
   echo "Starting QEMU with attached ISO image and hard disk."

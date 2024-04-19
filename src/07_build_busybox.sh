@@ -39,6 +39,12 @@ fi
 # Now we tell Busybox to use the sysroot area.
 sed -i "s|.*CONFIG_SYSROOT.*|CONFIG_SYSROOT=\"$SYSROOT\"|" .config
 
+
+# Now we tell Busybox to use the sysroot area.
+sed -i "s/.*CONFIG_TC.*/CONFIG_TC=n/" .config
+
+echo "CONFIG_TCPSVD=n" >> .config
+
 # Configure the compiler flags and explicitly link Busybox with GLIBC from sysroot.
 sed -i "s|.*CONFIG_EXTRA_CFLAGS.*|CONFIG_EXTRA_CFLAGS=\"$CFLAGS -L$SYSROOT/lib\"|" .config
 

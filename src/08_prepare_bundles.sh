@@ -9,6 +9,7 @@ echo "*** PREPARE OVERLAY BEGIN ***"
 
 echo "Preparing overlay work area."
 rm -rf $WORK_DIR/overlay*
+mkdir -p $TMP_ROOTFS
 
 # Read the 'OVERLAY_BUNDLES' property from '.config'
 OVERLAY_BUNDLES=`read_property OVERLAY_BUNDLES`

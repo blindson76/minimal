@@ -34,10 +34,10 @@ make_target \
 echo "Removing unnecessary links."
 cd $DEST_DIR/lib/modules/*
 unlink build
-unlink source
+# unlink source
 
-echo "Reducing the size of all generated kernel modules."
-reduce_size $DEST_DIR/lib/modules
+#echo "Reducing the size of all generated kernel modules."
+#reduce_size $DEST_DIR/lib/modules
 
 mkdir -p $DEST_DIR/etc/autorun
 cp $SRC_DIR/10_modules.sh $DEST_DIR/etc/autorun

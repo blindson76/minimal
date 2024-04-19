@@ -13,6 +13,7 @@ BUSYBOX_INSTALLED=$WORK_DIR/busybox/busybox_installed
 SYSROOT=$WORK_DIR/sysroot
 ROOTFS=$WORK_DIR/rootfs
 OVERLAY_ROOTFS=$WORK_DIR/overlay_rootfs
+TMP_ROOTFS=$WORK_DIR/tmp_rootfs
 ISOIMAGE=$WORK_DIR/isoimage
 ISOIMAGE_OVERLAY=$WORK_DIR/isoimage_overlay
 
