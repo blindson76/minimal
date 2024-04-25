@@ -32,8 +32,13 @@ else
   make defconfig -j $NUM_JOBS
   echo "Generated default kernel configuration."
 
+# Enable fuse
+  sed -i "s/.*CONFIG_FUSE_FS*/CONFIG_FUSE_FS=y/" .config
+  echo "CONFIG_CUSE=y" >> .config
+  echo "CONFIG_VIRTIO_FS=y" >> .config
+
   # Changes the name of the system to 'minimal'.
-  sed -i "s/.*CONFIG_DEFAULT_HOSTNAME.*/CONFIG_DEFAULT_HOSTNAME=\"minimal\"/" .config
+  sed -i "s/.*CONFIG_DEFAULT_HOSTNAME.*/CONFIG_DEFAULT_HOSTNAME=\"hloader\"/" .config
 
   # OVERLAYFS - BEGIN - most features are disabled (you don't really need them)
 

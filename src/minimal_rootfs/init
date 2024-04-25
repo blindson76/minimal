@@ -34,12 +34,20 @@ echo -e "Welcome to \\e[1mHVL \\e[32mLoader \\e[0m"
 
 # Wait 5 second or until any ~keyboard key is pressed.
 key="s"
+ip link set eth0 up
+ip addr add $(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }') brd + dev eth0
+mkdir /nfs
+mount -o vers=4 10.10.11.1:/nfs /nfs
+#parted -s -a optimal /dev/sda mklabel gpt unit MB mkpart primary fat32 1024 1536 set 1 esp on mkpart primary ntfs 1536 33536 mkpart primary ext4 33792 63792 print
+#mkfs.vfat -n System /dev/sda1
+#mkntfs -Q -L AppSys /dev/sda2
 
-for DEVICE in /sys/class/net/eth* ; do
-  echo "Found network device ${DEVICE##*/}"
-  ip link set ${DEVICE##*/} up
-  [ ${DEVICE##*/} != lo ] && udhcpc -b -i ${DEVICE##*/} -s /etc/05_rc.dhcp
-done
+mkdir /app
+ntfs-3g /dev/sda2 /app
+
+mkdir /efi
+mount -o rw /dev/sda1 /efi
+#wimapply /nfs/winpe.wim 1 /app
 if [ ! "$key" = "" ] ; then
   # Print second message on screen.
   #cat /etc/msg/init_02.txt
