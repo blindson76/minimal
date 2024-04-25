@@ -70,9 +70,14 @@ func get_childs(hiv *C.hive_h, node C.hive_node_h, order int) {
 	}
 }
 func main() {
-	hiv, err := C.hivex_open(C.CString("./BCD"), C.HIVEX_OPEN_WRITE)
+	h := OpenHive("/media/sf_works/bcd/bcd1")
+	fmt.Println(h.GetChild("Description").ValDword("System"))
+	if 2 > 1 {
+		return
+	}
+	hiv, err := C.hivex_open(C.CString("/media/sf_works/bcd/bcd1"), 0)
 	if hiv == nil {
-		panic("couldn't open hive")
+		panic(err)
 	}
 	root, err := C.hivex_root(hiv)
 	if err != nil {
