@@ -2,22 +2,38 @@ package main
 
 /*
 #cgo CFLAGS:-I/home/user/work/mini/src/work/tmp_rootfs/include
-#cgo LDFLAGS:-L/home/user/work/mini/src/work/tmp_rootfs/lib -lparted -lhivex
+#cgo LDFLAGS:-L/home/user/work/mini/src/work/tmp_rootfs/lib -lparted -lhivex -lblkid
 #include <parted/parted.h>
 #include <hivex.h>
+#include <blkid/blkid.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/sysmacros.h>
 PedDevice* get_device(char* dev){
 	ped_device_probe_all();
 	ped_device_get(dev);
 }
 
+void test_stat(const char* file){
+	printf("%s\r\n", file);
+	struct stat pStat;
+	int res = fstatat(-100, file, &pStat, 0);
+	printf("res:%d:%d\r\n", major(pStat.st_rdev), minor(pStat.st_rdev));
 
+}
 */
 import "C"
 import (
+	"encoding/binary"
 	"encoding/hex"
+	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
-	"unsafe"
 )
 
 func create_part(disk *C.PedDisk, fs string, size C.longlong) *C.PedPartition {
@@ -44,47 +60,59 @@ func create_part(disk *C.PedDisk, fs string, size C.longlong) *C.PedPartition {
 	fmt.Println("Unit fmt:", sectorSize, start, end, res)
 	return nil
 }
-func get_value(hiv *C.hive_h, kv C.hive_value_h) string {
-	var vType C.hive_type
-	var vSize C.size_t
-	val := C.hivex_value_value(hiv, kv, &vType, &vSize)
-	vBuff := C.GoBytes(unsafe.Pointer(&val), C.int(vSize))
-	//fmt.Println("VType", vtype, vSize, val, hex.EncodeToString(vBuff))
+func EncodeUUID(data []byte) []byte {
+	ndata := make([]byte, 16)
+	copy(ndata, data)
+	binary.LittleEndian.PutUint32(ndata[0:], binary.BigEndian.Uint32(data[0:]))
+	binary.LittleEndian.PutUint16(ndata[4:], binary.BigEndian.Uint16(data[4:]))
+	binary.LittleEndian.PutUint16(ndata[6:], binary.BigEndian.Uint16(data[6:]))
+	return ndata
+}
 
-	return hex.EncodeToString(vBuff)
-}
-func get_childs(hiv *C.hive_h, node C.hive_node_h, order int) {
-	name := C.hivex_node_name(hiv, node)
-	fmt.Println(strings.Repeat(" ", order*2), "->", C.GoString(name))
-	numChild := C.hivex_node_nr_children(hiv, node)
-	childs := unsafe.Slice(C.hivex_node_children(hiv, node), numChild)
-	for _, v := range childs {
-		get_childs(hiv, v, order+1)
+var (
+	bcdFlag string
+	devFlag string
+)
+
+func GetDiskFromPart(part string) string {
+	var stat C.struct_stat
+	rp := C.fstatat(-100, C.CString(part), &stat, 0)
+	if rp != 0 {
+		panic("Not found")
 	}
-	keyCounts := C.hivex_node_nr_values(hiv, node)
-	kvs := unsafe.Slice(C.hivex_node_values(hiv, node), keyCounts)
-	for _, key := range kvs {
-		keyName := C.GoString(C.hivex_value_key(hiv, key))
-		value := get_value(hiv, key)
-		fmt.Println(strings.Repeat(" ", order*2), keyName, ":", value)
-	}
+	plink := fmt.Sprintf("/sys/dev/block/%d:%d", (stat.st_rdev&0xff00)>>8, 0)
+	res, _ := os.Readlink(plink)
+	paths := strings.Split(res, "/")
+	return "/dev/" + paths[len(paths)-1]
 }
+
 func main() {
-	h := OpenHive("/media/sf_works/bcd/bcd1")
-	fmt.Println(h.GetChild("Description").ValDword("System"))
+
+	flag.StringVar(&bcdFlag, "b", "/media/sf_work/bcd_disk", "bcd store")
+	flag.StringVar(&devFlag, "s", "/dev/nbd1", "os partition")
+
+	rp := GetDiskFromPart("/dev/nbd0p1")
+	fmt.Println(rp)
+	//C.test_stat()
+
 	if 2 > 1 {
 		return
 	}
-	hiv, err := C.hivex_open(C.CString("/media/sf_works/bcd/bcd1"), 0)
-	if hiv == nil {
-		panic(err)
+	fmt.Println(filepath.EvalSymlinks("/dev/nbd1p1"))
+	res := C.blkid_new_probe_from_filename(C.CString("/dev/nbd1"))
+	fmt.Println(res)
+	duid := GetDevice("/dev/nbd1").GetDisk().UUID()
+	h := OpenHive("/media/sf_work/bcd_disk").GetChild("Objects")
+	for _, c := range h.Childs() {
+		for _, filed := range c.GetChild("Elements").Childs() {
+			if filed.Name() == "11000001" {
+				fieldVal := filed.Val("Element")
+				fmt.Println(hex.EncodeToString(fieldVal))
+				copy(fieldVal[56:], EncodeUUID(duid))
+				fmt.Println(hex.EncodeToString(fieldVal))
+			}
+		}
 	}
-	root, err := C.hivex_root(hiv)
-	if err != nil {
-		panic("couldn't open hive")
-	}
-	desc := C.hivex_node_get_child(hiv, root, C.CString("Objects"))
-	get_childs(hiv, desc, 0)
 }
 func main_disk() {
 	dev := C.get_device(C.CString("/dev/nbd0"))

@@ -33,6 +33,7 @@ LDFLAGS="-L$TMP_ROOTFS/lib -L$TMP_ROOTFS/usr/lib" \
   ADJTIME_PATH=/var/lib/hwclock/adjtime   \
   --prefix=$DEST_DIR \
   --disable-all-programs \
+  --enable-libblkid \
   --enable-libuuid
 
 echo "Building '$BUNDLE_NAME'."
