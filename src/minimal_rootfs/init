@@ -39,7 +39,7 @@ ip addr add $(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }'
 mkdir /nfs
 mount -o vers=4 10.10.11.1:/nfs /nfs
 #parted -s -a optimal /dev/sda mklabel gpt unit MB mkpart primary fat32 1024 1536 set 1 esp on mkpart primary ntfs 1536 33536 mkpart primary ext4 33792 63792 print
-#mkfs.vfat -n System /dev/sda1
+mkfs.vfat -n System /dev/sda1
 #mkntfs -Q -L AppSys /dev/sda2
 
 mkdir /app
@@ -47,6 +47,12 @@ ntfs-3g /dev/sda2 /app
 
 mkdir /efi
 mount -o rw /dev/sda1 /efi
+mkdir -p /efi/EFI/Microsoft/Boot
+mkdir -p /efi/EFI/Boot
+
+wget -P /efi/EFI/Boot http://10.10.11.1/EFI/Boot/bootx64.efi
+wget -P /efi/EFI/Microsoft/Boot http://10.10.11.1/BCD
+ldr -s /dev/sda2 -b /efi/EFI/Microsoft/Boot/BCD
 #wimapply /nfs/winpe.wim 1 /app
 if [ ! "$key" = "" ] ; then
   # Print second message on screen.
