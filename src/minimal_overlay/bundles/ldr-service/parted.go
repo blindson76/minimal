@@ -2,7 +2,7 @@ package main
 
 /*
 #cgo CFLAGS:-I/home/user/work/mini/src/work/tmp_rootfs/include
-#cgo LDFLAGS:-L /home/user/work/mini/src/work/tmp_rootfs/lib -lparted -ludev
+#cgo LDFLAGS:-L /home/user/work/mini/src/work/tmp_rootfs/lib -lparted
 #include <sys/stat.h>
 #include <libudev.h>
 #include <parted/parted.h>
@@ -10,6 +10,7 @@ package main
 import "C"
 import (
 	"fmt"
+	"os"
 	"strings"
 	"unsafe"
 )
@@ -79,37 +80,38 @@ func Devices() []string {
 			break
 		}
 		if next != nil {
-			fmt.Println(i, next)
+			//fmt.Println(i, next)
 			devs = append(devs, next)
 			pDev = next
 		}
 	}
-	fmt.Println(devs)
+	//fmt.Println(devs)
 	return nil
 }
-
 func GetDiskAndPartNum(part string) (string, int) {
-	var stat C.struct_stat
+	dev := part
+	if strings.Contains(part, "/") {
+		parts := strings.Split(part, "/")
+		dev = parts[len(parts)-1]
+	}
+	devPath, err := os.Readlink("/sys/class/block/" + dev)
+	if err != nil {
+		panic(err)
+	}
+	parts := strings.Split(devPath, "/")
+	parentDev := parts[len(parts)-2]
+	var stat, pstat C.struct_stat
 	ret := C.fstatat(0, C.CString(part), &stat, 0)
 	if ret != 0 {
 		panic(fmt.Sprintf("Dev: %s not found", part))
 	}
-	udev := C.udev_new()
-	dev := C.udev_device_new_from_devnum(udev, 'b', stat.st_rdev)
-	if dev == nil {
-		panic("Not found dev")
+	ret = C.fstatat(0, C.CString("/dev/"+parentDev), &pstat, 0)
+	if ret != 0 {
+		panic(fmt.Sprintf("Dev: %s not found", part))
 	}
-	pdev := C.udev_device_get_parent(dev)
-	if pdev == nil {
-		panic("Not found parent dev")
-	}
-	pDevNum := C.udev_device_get_devnum(pdev)
-	if pDevNum == 0 {
-		panic("Not found parent dev id")
-	}
-	devName := C.GoString(C.udev_device_get_devnode(dev))
-	pDevName := C.GoString(C.udev_device_get_devnode(pdev))
-	return strings.Replace(part, devName, pDevName, 1), int(stat.st_rdev - pDevNum)
+	//fmt.Println(devPath, parentDev, stat.st_rdev-pstat.st_rdev)
+
+	return "/dev/" + parentDev, int(stat.st_rdev - pstat.st_rdev)
 }
 
 func create_part(disk *C.PedDisk, fs string, size C.longlong) *C.PedPartition {

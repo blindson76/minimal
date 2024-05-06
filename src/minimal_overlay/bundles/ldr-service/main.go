@@ -4,7 +4,6 @@ import "C"
 import (
 	"encoding/binary"
 	"flag"
-	"fmt"
 	"os"
 )
 
@@ -30,12 +29,14 @@ func main() {
 	if bcdFlag == "" || devFlag == "" {
 		panic("arguments required ")
 	}
-	fmt.Println("bcd:", bcdFlag)
+	//fmt.Println("bcd:", bcdFlag)
 
 	if 2 > 1 {
 		//return
 	}
 	err := BCDFix(bcdFlag, devFlag)
-	fmt.Println(err)
-	os.Exit(1)
+	if err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }

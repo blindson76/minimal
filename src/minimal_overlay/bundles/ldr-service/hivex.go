@@ -7,6 +7,7 @@ package main
 */
 import "C"
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"runtime"
@@ -214,7 +215,7 @@ func printUUID(data []byte) {
 func BCDFix(bxdStore, device string) error {
 
 	diskName, partId := GetDiskAndPartNum(device)
-	fmt.Println(diskName, partId)
+	//fmt.Println(diskName, partId)
 	dev := GetDevice(diskName)
 	if dev == nil {
 		panic("Couldn' open dev")
@@ -223,7 +224,32 @@ func BCDFix(bxdStore, device string) error {
 	part := disk.GetPartition(partId)
 	diskUUID := disk.UUID()
 	partUUID := part.UUID()
-	h := OpenHive(bxdStore).GetChild("Objects")
+
+	// data, err := os.ReadFile(bxdStore)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// hexStr := hex.EncodeToString(data)
+	// parted := strings.ReplaceAll(hexStr, "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf", hex.EncodeToString(EncodeUUID(partUUID)))
+	// parted = strings.ReplaceAll(parted, "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf", hex.EncodeToString(EncodeUUID(diskUUID)))
+	// decoded, err := hex.DecodeString(parted)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// err = os.WriteFile(bxdStore, decoded, os.ModePerm)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	fmt.Printf("%s/%s\r\n", hex.EncodeToString(EncodeUUID(diskUUID)), hex.EncodeToString(EncodeUUID(partUUID)))
+	if 2 > 1 {
+		return nil
+	}
+
+	hiv := OpenHive(bxdStore)
+	if hiv == nil {
+		panic("Couldn't open hive file")
+	}
+	h := hiv.GetChild("Objects")
 	printUUID(diskUUID)
 	printUUID(partUUID)
 	fixed := 0
