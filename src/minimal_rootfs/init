@@ -37,23 +37,52 @@ key="s"
 ip link set eth0 up
 ip addr add $(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }') brd + dev eth0
 mkdir /nfs
-mount -o vers=4 10.10.11.1:/nfs /nfs
-#parted -s -a optimal /dev/sda mklabel gpt unit MB mkpart primary fat32 1024 1536 set 1 esp on mkpart primary ntfs 1536 33536 mkpart primary ext4 33792 63792 print
-mkfs.vfat -n System /dev/sda1
-#mkntfs -Q -L AppSys /dev/sda2
+mount -o vers=4 10.10.11.1:/home/user/work/pxe/root /nfs
+parted -s /dev/sda \
+    mklabel gpt unit s \
+    mkpart primary fat32 34 32767 \
+    set 1 msftres on \
+    name 1 Reserved \
+    mkpart primary fat32 32768 1081343 \
+    set 2 boot on \
+    set 2 esp on \
+    name 2 ESP \
+    mkpart primary ntfs 1081344 66617343 \
+    set 3 msftdata on \
+    name 3 AppSys \
+    print
+mkfs.vfat -n System /dev/sda2
+mkntfs -Q /dev/sda3
 
-mkdir /app
-ntfs-3g /dev/sda2 /app
+
+wimapply /nfs/winpe.wim 1 /dev/sda3
+
+#mkdir /app
+#ntfs-3g /dev/sda2 /app
 
 mkdir /efi
-mount -o rw /dev/sda1 /efi
-mkdir -p /efi/EFI/Microsoft/Boot
-mkdir -p /efi/EFI/Boot
+mount -o rw /dev/sda2 /efi
+#mkdir -p /efi/EFI/Microsoft/Boot
+#mkdir -p /efi/EFI/Boot
 
-wget -P /efi/EFI/Boot http://10.10.11.1/EFI/Boot/bootx64.efi
-wget -P /efi/EFI/Microsoft/Boot http://10.10.11.1/BCD
-ldr -s /dev/sda2 -b /efi/EFI/Microsoft/Boot/BCD
-#wimapply /nfs/winpe.wim 1 /app
+#wget -P /efi/EFI/Boot http://10.10.11.1/EFI/Boot/bootx64.efi
+wget -qO- http://10.10.11.1/EFI.tar | tar -xv -C /efi/
+uuids=$(ldr -s /dev/sda3 -b /efi/EFI/Microsoft/Boot/BCD)
+echo $uuids
+partUUID=${uuids#*/}
+diskUUID=${uuids%/*}
+echo "Disk" $diskUUID
+echo "Part" $partUUID
+mkdir /reg
+mount.winregfs /efi/EFI/Microsoft/Boot/BCD /reg
+for i in $(find /reg -print | grep 1000001/Element.bin); do
+  echo $i
+  orig=$(xxd -p -c 100 $i)
+  echo $orig 
+  echo ${orig:0:32*2}$partUUID${orig:48*2:8*2}$diskUUID${orig:72*2} | xxd -r -p > $i
+done
+umount /reg
+umount /efi
 if [ ! "$key" = "" ] ; then
   # Print second message on screen.
   #cat /etc/msg/init_02.txt
