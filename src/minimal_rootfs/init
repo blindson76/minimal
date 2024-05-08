@@ -40,34 +40,31 @@ mkdir /nfs
 mount -o vers=4 10.10.11.1:/home/user/work/pxe/root /nfs
 parted -s /dev/sda \
     mklabel gpt unit s \
-    mkpart primary fat32 34 32767 \
-    set 1 msftres on \
-    name 1 Reserved \
     mkpart primary fat32 32768 1081343 \
-    set 2 boot on \
-    set 2 esp on \
-    name 2 ESP \
-    mkpart primary ntfs 1081344 66617343 \
-    set 3 msftdata on \
-    name 3 AppSys \
+    set 1 boot on \
+    set 1 esp on \
+    name 1 ESP \
+    mkpart primary ntfs 1081344 6617343 \
+    set 2 msftdata on \
+    name 2 AppSys \
     print
-mkfs.vfat -n System /dev/sda2
-mkntfs -Q /dev/sda3
+mkfs.vfat -n System /dev/sda1
+mkntfs -Q /dev/sda2
 
 
-wimapply /nfs/winpe.wim 1 /dev/sda3
+wimapply /nfs/winpe.wim 1 /dev/sda2
 
 #mkdir /app
-#ntfs-3g /dev/sda2 /app
+#ntfs-3g /dev/sda1 /app
 
 mkdir /efi
-mount -o rw /dev/sda2 /efi
+mount -o rw /dev/sda1 /efi
 #mkdir -p /efi/EFI/Microsoft/Boot
 #mkdir -p /efi/EFI/Boot
 
 #wget -P /efi/EFI/Boot http://10.10.11.1/EFI/Boot/bootx64.efi
 wget -qO- http://10.10.11.1/EFI.tar | tar -xv -C /efi/
-uuids=$(ldr -s /dev/sda3 -b /efi/EFI/Microsoft/Boot/BCD)
+uuids=$(ldr -s /dev/sda2 -b /efi/EFI/Microsoft/Boot/BCD)
 echo $uuids
 partUUID=${uuids#*/}
 diskUUID=${uuids%/*}
