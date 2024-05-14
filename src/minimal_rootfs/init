@@ -29,57 +29,81 @@ echo -e "Welcome to \\e[1mHVL \\e[32mLoader \\e[0m"
 # Let's mount all core file systems.
 /etc/01_prepare.sh
 
+set -e
 # Print first message on screen.
 #cat /etc/msg/init_01.txt
-
+mkdir /var/run/
+ipconf=true
+partition=false
+applywim=false
+mountnfs=true
+bcdfix=false
 # Wait 5 second or until any ~keyboard key is pressed.
 key="s"
-ip link set eth0 up
-ip addr add $(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }') brd + dev eth0
-mkdir /nfs
-mount -o vers=4 10.10.11.1:/home/user/work/pxe/root /nfs
-parted -s /dev/sda \
-    mklabel gpt unit s \
-    mkpart primary fat32 32768 1081343 \
-    set 1 boot on \
-    set 1 esp on \
-    name 1 ESP \
-    mkpart primary ntfs 1081344 6617343 \
-    set 2 msftdata on \
-    name 2 AppSys \
-    print
-mkfs.vfat -n System /dev/sda1
-mkntfs -Q /dev/sda2
+if $ipconf ; then
+  echo "configuring net"
+  ip link set eth0 up
+  ip addr add $(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }') brd + dev eth0
+fi
 
+if $mountnfs ; then
+  echo "mounting nfs share"
+  mkdir /nfs
+  mount -o vers=4 10.10.11.1:/home/user/work/pxe/root /nfs
+fi
 
-wimapply /nfs/winpe.wim 1 /dev/sda2
+if $partition ; then
+  echo "applying partition schema"
+  parted -s /dev/sda \
+      mklabel gpt unit s \
+      mkpart primary fat32 32768 1081343 \
+      set 1 boot on \
+      set 1 esp on \
+      name 1 ESP \
+      mkpart primary ntfs 1081344 6617343 \
+      set 2 msftdata on \
+      name 2 AppSys \
+      print
+  mkfs.vfat -n System /dev/sda1
+  mkntfs -Q /dev/sda2
+fi
+
+if $applywim ; then
+  echo "applying wim image"
+  wimapply /nfs/winpe.wim 1 /dev/sda2
+fi
 
 #mkdir /app
 #ntfs-3g /dev/sda1 /app
+if $bcdfix ; then
+  echo "fixing bcd store"
+  mkdir /efi
+  mount -o rw /dev/sda1 /efi
+  #mkdir -p /efi/EFI/Microsoft/Boot
+  #mkdir -p /efi/EFI/Boot
 
-mkdir /efi
-mount -o rw /dev/sda1 /efi
-#mkdir -p /efi/EFI/Microsoft/Boot
-#mkdir -p /efi/EFI/Boot
-
-#wget -P /efi/EFI/Boot http://10.10.11.1/EFI/Boot/bootx64.efi
-wget -qO- http://10.10.11.1/EFI.tar | tar -xv -C /efi/
-uuids=$(ldr -s /dev/sda2 -b /efi/EFI/Microsoft/Boot/BCD)
-echo $uuids
-partUUID=${uuids#*/}
-diskUUID=${uuids%/*}
-echo "Disk" $diskUUID
-echo "Part" $partUUID
-mkdir /reg
-mount.winregfs /efi/EFI/Microsoft/Boot/BCD /reg
-for i in $(find /reg -print | grep 1000001/Element.bin); do
-  echo $i
-  orig=$(xxd -p -c 100 $i)
-  echo $orig 
-  echo ${orig:0:32*2}$partUUID${orig:48*2:8*2}$diskUUID${orig:72*2} | xxd -r -p > $i
-done
-umount /reg
-umount /efi
+  #wget -P /efi/EFI/Boot http://10.10.11.1/EFI/Boot/bootx64.efi
+  wget -qO- http://10.10.11.1/EFI.tar | tar -xv -C /efi/
+  uuids=$(ldr -s /dev/sda2 -b /efi/EFI/Microsoft/Boot/BCD)
+  echo $uuids
+  partUUID=${uuids#*/}
+  diskUUID=${uuids%/*}
+  echo "Disk" $diskUUID
+  echo "Part" $partUUID
+  mkdir /reg
+  mount.winregfs /efi/EFI/Microsoft/Boot/BCD /reg
+  for i in $(find /reg -print | grep 1000001/Element.bin); do
+    echo $i
+    orig=$(xxd -p -c 100 $i)
+    echo $orig 
+    echo ${orig:0:32*2}$partUUID${orig:48*2:8*2}$diskUUID${orig:72*2} | xxd -r -p > $i
+  done
+  umount /reg
+  umount /efi
+fi
+clear
+echo "Starting HVL Loader Service"
+hloader
 if [ ! "$key" = "" ] ; then
   # Print second message on screen.
   #cat /etc/msg/init_02.txt
