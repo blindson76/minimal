@@ -4,7 +4,9 @@ import "C"
 import (
 	"encoding/binary"
 	"flag"
+	"fmt"
 	"os"
+	"os/exec"
 )
 
 func EncodeUUID(data []byte) []byte {
@@ -23,6 +25,31 @@ var (
 
 func main() {
 
+	cmd := exec.Command("/usr/local/sbin/parted", "-l")
+	rd, err := cmd.StdoutPipe()
+	//cmd.Stderr = cmd.Stdout
+	if err != nil {
+		panic(err)
+	}
+
+	if err = cmd.Start(); err != nil {
+		panic(err)
+	}
+
+	for {
+		tmp := make([]byte, 1024)
+		_, err := rd.Read(tmp)
+		fmt.Print(string(tmp))
+		if err != nil {
+			break
+		}
+	}
+
+	ddev := GetDiskByLocation("pci0000:00/0000:00:0d.0")
+	fmt.Println("Found dev:", ddev)
+	if 2 > 1 {
+		return
+	}
 	flag.StringVar(&bcdFlag, "b", "", "bcd store")
 	flag.StringVar(&devFlag, "s", "", "os partition")
 	flag.Parse()
@@ -34,7 +61,7 @@ func main() {
 	if 2 > 1 {
 		//return
 	}
-	err := BCDFix(bcdFlag, devFlag)
+	err = BCDFix(bcdFlag, devFlag)
 	if err != nil {
 		os.Exit(1)
 	}

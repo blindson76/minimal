@@ -88,6 +88,25 @@ func Devices() []string {
 	//fmt.Println(devs)
 	return nil
 }
+
+// todo: find a better way
+func GetDiskByLocation(loc string) string {
+	direntry, er := os.ReadDir("/sys/class/block/")
+	if er != nil {
+		return ""
+	}
+	for _, a := range direntry {
+		info, _ := os.Readlink(fmt.Sprintf("/sys/class/block/%s", a.Name()))
+		if strings.Contains(info, loc) {
+			ovs := strings.Split(info, "/block/")
+			if !strings.Contains(ovs[len(ovs)-1], "/") {
+				return ovs[len(ovs)-1]
+			}
+			//return ovs[len(ovs)-1]
+		}
+	}
+	return ""
+}
 func GetDiskAndPartNum(part string) (string, int) {
 	dev := part
 	if strings.Contains(part, "/") {

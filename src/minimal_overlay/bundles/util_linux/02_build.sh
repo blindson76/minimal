@@ -34,7 +34,8 @@ LDFLAGS="-L$TMP_ROOTFS/lib -L$TMP_ROOTFS/usr/lib" \
   --prefix=$DEST_DIR \
   --disable-all-programs \
   --enable-libblkid \
-  --enable-libuuid
+  --enable-libuuid \
+  --enable-mkfs
 
 echo "Building '$BUNDLE_NAME'."
 make -j $NUM_JOBS
@@ -44,11 +45,14 @@ make -j $NUM_JOBS install
 
 echo "Reducing '$BUNDLE_NAME' size."
 reduce_size $DEST_DIR/bin
+reduce_size $DEST_DIR/sbin
 
 cp -r --remove-destination $DEST_DIR/* \
   $TMP_ROOTFS
 cp -r --remove-destination $DEST_DIR/lib/libuuid* \
   $OVERLAY_ROOTFS/lib
+cp -r --remove-destination $DEST_DIR/sbin/* \
+  $OVERLAY_ROOTFS/sbin/
 
 echo "Bundle '$BUNDLE_NAME' has been installed."
 
