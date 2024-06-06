@@ -134,6 +134,27 @@ else
   echo "CONFIG_FB_SM712=n" >> .config
   echo "CONFIG_FB_DEVICE=y" >> .config
 
+  echo "CONFIG_CIFS=m" >> .config
+  echo "CONFIG_CIFS_STATS2=y" >> .config
+  echo "CONFIG_CIFS_ALLOW_INSECURE_LEGACY=y" >> .config
+  echo "CONFIG_CIFS_UPCALL=y" >> .config
+  echo "CONFIG_CIFS_XATTR=y" >> .config
+  echo "CONFIG_CIFS_POSIX=y" >> .config
+  echo "CONFIG_CIFS_DEBUG=y" >> .config
+  echo "CONFIG_CIFS_DEBUG2=y" >> .config
+  echo "CONFIG_CIFS_DEBUG_DUMP_KEYS=y" >> .config
+  echo "CONFIG_CIFS_DFS_UPCALL=y" >> .config
+  echo "CONFIG_CIFS_SWN_UPCALL=y" >> .config
+  echo "CONFIG_CIFS_ROOT=y" >> .config
+
+  echo "CONFIG_NFS_V4_1=y" >> .config
+  echo "CONFIG_NFS_V4_2=y" >> .config
+  echo "CONFIG_NFS_V4_1_IMPLEMENTATION_ID_DOMAIN=\"bootserver\"" >> .config
+  echo "CONFIG_NFS_V4_1_MIGRATION=y" >> .config
+  echo "CONFIG_NFS_V4_2_READ_PLUS=y" >> .config
+
+  
+
   # Step 1 - disable all active kernel compression options (should be only one).
   sed -i "s/.*\\(CONFIG_KERNEL_.*\\)=y/\\#\\ \\1 is not set/" .config
 

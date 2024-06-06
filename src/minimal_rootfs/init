@@ -29,6 +29,7 @@ echo -e "Welcome to \\e[1mHVL \\e[32mLoader \\e[0m"
 # Let's mount all core file systems.
 /etc/01_prepare.sh
 
+modprobe cifs
 set -e
 # Print first message on screen.
 #cat /etc/msg/init_01.txt
@@ -36,7 +37,8 @@ mkdir /var/run/
 ipconf=true
 partition=false
 applywim=false
-mountnfs=true
+mountnfs=false
+mountcifs=false
 bcdfix=false
 # Wait 5 second or until any ~keyboard key is pressed.
 key="s"
@@ -44,6 +46,12 @@ if $ipconf ; then
   echo "configuring net"
   ip link set eth0 up
   ip addr add $(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }') brd + dev eth0
+fi
+
+if $mountcifs ; then
+  echo "mounting win share"
+  mkdir -p /nfs
+  mount -t cifs //$(cat /proc/cmdline | awk -Fnet= '{ print $2 }' | awk '{ print $1 }')/load /nfs 
 fi
 
 if $mountnfs ; then

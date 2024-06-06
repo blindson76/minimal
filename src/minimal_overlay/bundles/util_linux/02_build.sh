@@ -46,7 +46,7 @@ make -j $NUM_JOBS install
 echo "Reducing '$BUNDLE_NAME' size."
 reduce_size $DEST_DIR/bin
 reduce_size $DEST_DIR/sbin
-
+mkdir -p $OVERLAY_ROOTFS/sbin/
 cp -r --remove-destination $DEST_DIR/* \
   $TMP_ROOTFS
 cp -r --remove-destination $DEST_DIR/lib/libuuid* \

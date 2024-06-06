@@ -12,3 +12,4 @@ cp -rf /media/sf_work/hloader/hloader ./work/overlay_rootfs/bin/hloader
 ./09_generate_rootfs.sh
 ./10_pack_rootfs.sh
 cp -rf ./work/rootfs.cpio.xz ~/work/pxe/root/rootfs.xz
+cp -rf ./work/rootfs.cpio.xz /media/sf_work/pxe/root/rootfs.xz
