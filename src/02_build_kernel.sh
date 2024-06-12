@@ -153,6 +153,10 @@ else
   echo "CONFIG_NFS_V4_1_MIGRATION=y" >> .config
   echo "CONFIG_NFS_V4_2_READ_PLUS=y" >> .config
 
+
+  #sed -i "s/.*CONFIG_EFIVAR_FS.*/CONFIG_EFIVAR_FS=y/" .config
+  
+
   
 
   # Step 1 - disable all active kernel compression options (should be only one).

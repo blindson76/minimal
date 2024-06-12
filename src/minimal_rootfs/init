@@ -34,6 +34,8 @@ set -e
 # Print first message on screen.
 #cat /etc/msg/init_01.txt
 mkdir /var/run/
+mkdir -p /sys/firmware/efi/efivars
+mount -t efivarfs efivarfs /sys/firmware/efi/efivars
 ipconf=true
 partition=false
 applywim=false
@@ -111,6 +113,7 @@ if $bcdfix ; then
 fi
 clear
 echo "Starting HVL Loader Service"
+export PATH=$PATH:/bin:/sbin:/usr/bin:/usr/sbin
 hloader
 if [ ! "$key" = "" ] ; then
   # Print second message on screen.

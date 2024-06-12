@@ -54,6 +54,9 @@ cp -r --remove-destination $DEST_DIR/lib/libuuid* \
 cp -r --remove-destination $DEST_DIR/sbin/* \
   $OVERLAY_ROOTFS/sbin/
 
+cp -r --remove-destination $DEST_DIR/lib/libblk* \
+  $OVERLAY_ROOTFS/lib
+
 echo "Bundle '$BUNDLE_NAME' has been installed."
 
 cd $SRC_DIR
