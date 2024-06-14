@@ -78,7 +78,7 @@ else
 
   sed -i "s/.*CONFIG_FB.*/CONFIG_FB=y/" .config
   echo "CONFIG_FB_EFI=y" >> .config
-  echo "CONFIG_FB_VESA=y" >> .config
+  echo "CONFIG_FB_VESA=n" >> .config
   # Required settings when using FB
   echo "CONFIG_FRAMEBUFFER_CONSOLE=y" >> .config
   echo "CONFIG_FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION=y" >> .config
@@ -130,9 +130,9 @@ else
   echo "CONFIG_FB_VIRTUAL=n" >> .config
   echo "CONFIG_FB_METRONOME=n" >> .config
   echo "CONFIG_FB_MB862XX=n" >> .config
-  echo "CONFIG_FB_SIMPLE=n" >> .config
+  echo "CONFIG_FB_SIMPLE=y" >> .config
   echo "CONFIG_FB_SM712=n" >> .config
-  echo "CONFIG_FB_DEVICE=y" >> .config
+  echo "CONFIG_FB_DEVICE=n" >> .config
 
   echo "CONFIG_CIFS=m" >> .config
   echo "CONFIG_CIFS_STATS2=y" >> .config
@@ -154,8 +154,8 @@ else
   echo "CONFIG_NFS_V4_2_READ_PLUS=y" >> .config
 
 
-  #sed -i "s/.*CONFIG_EFIVAR_FS.*/CONFIG_EFIVAR_FS=y/" .config
-  
+  #sed -i "s/.*CONFIG_EFIVAR_FS.*/CONFIG_EFIVAR_FS=y/" .config   
+
 
   
 
