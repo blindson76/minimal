@@ -77,8 +77,8 @@ else
   echo "CONFIG_NTFS3_FS_POSIX_ACL=n" >> .config
 
   sed -i "s/.*CONFIG_FB.*/CONFIG_FB=y/" .config
-  echo "CONFIG_FB_EFI=y" >> .config
-  echo "CONFIG_FB_VESA=n" >> .config
+  echo "CONFIG_FB_EFI=n" >> .config
+  echo "CONFIG_FB_VESA=y" >> .config
   # Required settings when using FB
   echo "CONFIG_FRAMEBUFFER_CONSOLE=y" >> .config
   echo "CONFIG_FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION=y" >> .config
@@ -87,7 +87,8 @@ else
   echo "CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER=n" >> .config
   echo "CONFIG_LOGO=n" >> .config
   echo "CONFIG_FONTS=n" >> .config  
-  echo "CONFIG_DRM_FBDEV_EMULATION=n" >> .config
+  echo "CONFIG_DRM_FBDEV_EMULATION=y" >> .config
+  echo "CONFIG_DRM_FBDEV_OVERALLOC=100" >> .config
   echo "CONFIG_FIRMWARE_EDID=n" >> .config
   echo "CONFIG_FB_FOREIGN_ENDIAN=n" >> .config
   echo "CONFIG_FB_MODE_HELPERS=n" >> .config
@@ -98,8 +99,8 @@ else
   echo "CONFIG_FB_ARC=n" >> .config
   echo "CONFIG_FB_ASILIANT=n" >> .config
   echo "CONFIG_FB_IMSTT=n" >> .config
-  echo "CONFIG_FB_VGA16=n" >> .config
-  echo "CONFIG_FB_UVESA=n" >> .config
+  echo "CONFIG_FB_VGA16=y" >> .config
+  echo "CONFIG_FB_UVESA=y" >> .config
   echo "CONFIG_FB_N411=n" >> .config
   echo "CONFIG_FB_HGA=n" >> .config
   echo "CONFIG_FB_OPENCORES=n" >> .config
@@ -132,7 +133,7 @@ else
   echo "CONFIG_FB_MB862XX=n" >> .config
   echo "CONFIG_FB_SIMPLE=y" >> .config
   echo "CONFIG_FB_SM712=n" >> .config
-  echo "CONFIG_FB_DEVICE=n" >> .config
+  echo "CONFIG_FB_DEVICE=y" >> .config
 
   echo "CONFIG_CIFS=m" >> .config
   echo "CONFIG_CIFS_STATS2=y" >> .config
