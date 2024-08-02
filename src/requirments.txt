@@ -1,0 +1,4 @@
+uuid-dev
+popt-dev
+libfuse-dev
+libgcrypt-dev
