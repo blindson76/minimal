@@ -1,4 +1,3 @@
-::sysinit:/etc/04_bootscript.sh
 ::restart:/sbin/init
 ::shutdown:echo -e "\nSyncing all file buffers."
 ::shutdown:sync

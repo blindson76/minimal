@@ -154,6 +154,14 @@ else
   echo "CONFIG_NFS_V4_1_MIGRATION=y" >> .config
   echo "CONFIG_NFS_V4_2_READ_PLUS=y" >> .config
 
+  
+  echo "CONFIG_INPUT_MOUSEDEV=y" >> .config
+  echo "CONFIG_INPUT_MOUSEDEV_PSAUX=n" >> .config
+  echo "CONFIG_INPUT_MOUSEDEV_SCREEN_X=1920" >> .config
+  echo "CONFIG_INPUT_MOUSEDEV_SCREEN_Y=1200" >> .config
+  
+  echo "CONFIG_DRM_SIMPLEDRM=y" >> .config
+
 
   #sed -i "s/.*CONFIG_EFIVAR_FS.*/CONFIG_EFIVAR_FS=y/" .config   
 
