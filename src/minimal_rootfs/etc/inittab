@@ -7,11 +7,8 @@
 ::shutdown:sleep 1
 ::ctrlaltdel:/sbin/reboot
 ::once:cat /etc/motd
-::respawn:/bin/cttyhack /bin/sh
-tty2::once:cat /etc/motd
+::respawn:/bin/cttyhack /bin/sh -c /etc/user.sh
+tty2::once:echo /etc/motd
 tty2::respawn:/bin/sh
-tty3::once:cat /etc/motd
-tty3::respawn:/bin/sh
-tty4::once:cat /etc/motd
-tty4::respawn:/bin/sh
+
 

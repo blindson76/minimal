@@ -20,9 +20,10 @@ echo "Configuring $BUNDLE_NAME."
 
 
 echo "Building $BUNDLE_NAME."
-  CFLAGS="-I${TMP_ROOTFS}/usr/include" \
+  CFLAGS="-I${TMP_ROOTFS}/usr/include -Wno-pointer-sign -Wno-duplicate-decl-specifier" \
   PKG_CONFIG_SYSROOT_DIR=${TMP_ROOTFS} \
   PKG_CONFIG_PATH=$TMP_ROOTFS/usr/lib64/pkgconfig/ \
+  LDFLAGS="-L${TMP_ROOTFS}/usr/lib64" \
   make EFIDIR=LFS -j $NUM_JOBS
   
 echo "Installing $BUNDLE_NAME."

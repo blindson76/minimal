@@ -87,8 +87,10 @@ else
   echo "CONFIG_FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER=n" >> .config
   echo "CONFIG_LOGO=n" >> .config
   echo "CONFIG_FONTS=n" >> .config  
+  echo "CONFIG_DRM=y" >> .config  
+  echo "CONFIG_DRM_I915=n" >> .config  
   echo "CONFIG_DRM_FBDEV_EMULATION=y" >> .config
-  echo "CONFIG_DRM_FBDEV_OVERALLOC=100" >> .config
+  echo "CONFIG_DRM_FBDEV_OVERALLOC=200" >> .config
   echo "CONFIG_FIRMWARE_EDID=n" >> .config
   echo "CONFIG_FB_FOREIGN_ENDIAN=n" >> .config
   echo "CONFIG_FB_MODE_HELPERS=n" >> .config
@@ -159,6 +161,8 @@ else
   echo "CONFIG_INPUT_MOUSEDEV_PSAUX=n" >> .config
   echo "CONFIG_INPUT_MOUSEDEV_SCREEN_X=1920" >> .config
   echo "CONFIG_INPUT_MOUSEDEV_SCREEN_Y=1200" >> .config
+  echo "CONFIG_INPUT_MOUSEDEV_PSAUX=y" >> .config
+  echo "CONFIG_SYSFB_SIMPLEFB=y" >> .config
   
   echo "CONFIG_DRM_SIMPLEDRM=y" >> .config
 

@@ -8,7 +8,9 @@ set -e
 HLOADER_PATH=/mnt/d/work/hloader
 CP_PATH=/mnt/d/work/root/
 pushd $HLOADER_PATH
+echo "compiling loder service"
 ./build.sh 
+echo "compiling done"
 popd
 cp -rf $HLOADER_PATH/hloader ./work/overlay_rootfs/bin/hloader
 ./09_generate_rootfs.sh
@@ -16,3 +18,4 @@ cp -rf $HLOADER_PATH/hloader ./work/overlay_rootfs/bin/hloader
 #cp -rf ./work/rootfs.cpio.xz ~/work/pxe/root/rootfs.xz
 cp -rf ./work/kernel/kernel_installed/kernel $CP_PATH/kernel.xz
 cp -rf ./work/rootfs.cpio.xz $CP_PATH/rootfs.xz
+echo "done."

@@ -21,7 +21,7 @@ echo "Building $BUNDLE_NAME."
 make -j $NUM_JOBS efivar
 
 echo "Installing $BUNDLE_NAME."
-make -j $NUM_JOBS install DESTDIR="$DEST_DIR"
+make -j $NUM_JOBS CFLAGS="-Wno-address-of-packed-member" install DESTDIR="$DEST_DIR"
 
 echo "Reducing '$BUNDLE_NAME' size."
 reduce_size $DEST_DIR/usr/bin
