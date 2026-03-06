@@ -197,8 +197,8 @@ new file mode 100644
 +
 +	while (!(dp->type == MLL_DP_TYPE_END &&
 +		 dp->sub_type == MLL_DP_SUBTYPE_END_ENTIRE)) {
-+		n  += dp->length;
-+		dp  = (const efi_device_path_protocol_t *)
++		n += dp->length;
++		dp = (const efi_device_path_protocol_t *)
 +		      ((const u8 *)dp + dp->length);
 +	}
 +	return n;
@@ -415,7 +415,7 @@ new file mode 100644
 +	 * ---------------------------------------------------------------- */
 +	if (one_shot) {
 +		efi_file_protocol_t *cfg_rw = NULL;
-+		const char invalidated[] = "# one-shot entry: already used\n";
++		const char invalidated[] = "# one-shot entry: consumed\n";
 +		unsigned long wr_size    = sizeof(invalidated) - 1;
 +
 +		efi_call_proto(cfg, close);
