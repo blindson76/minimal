@@ -133,6 +133,11 @@ prepare_boot_uefi() {
   cp $SRC_DIR/minimal_boot/uefi/loader/entries/mll-${MLL_CONF}.conf \
     $WORK_DIR/uefi/loader/entries
 
+  echo "Preparing EFI stub chainloader configuration template."
+  mkdir -p $WORK_DIR/uefi/EFI/BOOT
+  cp $SRC_DIR/minimal_boot/bios/EFI/BOOT/mll_next_boot.cfg \
+    $WORK_DIR/uefi/EFI/BOOT
+
   echo "Setting the default UEFI boot entry."
   sed -i "s|default.*|default mll-$MLL_CONF|" $WORK_DIR/uefi/loader/loader.conf
 

@@ -1,0 +1,541 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Minimal Linux Live <mll@example.com>
+Date: Fri, 06 Mar 2026 21:00:00 +0000
+Subject: [PATCH] efi/libstub: add chainloader capability to x86 EFI stub
+
+Extend the Linux kernel EFI stub so that, before committing to the
+normal kernel boot, it reads a configuration file from the EFI system
+partition:
+
+  \EFI\BOOT\mll_next_boot.cfg
+
+If the file is present and contains a non-empty EFI application path,
+that application is loaded via LoadImage() and started via StartImage()
+instead of booting the kernel.  This allows a running system to arrange
+for an alternate bootloader or OS to be started on the next reboot
+without modifying firmware boot-order variables.
+
+Config file format (plain ASCII, one meaningful line):
+
+  \EFI\path\to\app.efi
+      Always chainload this target on every boot.
+
+  once:\EFI\path\to\app.efi
+      Chainload this target once.  The config file is overwritten with
+      a comment before StartImage() is called so that subsequent boots
+      return to the normal kernel boot sequence.
+
+  Lines beginning with '#' and blank lines are ignored.
+
+If the config file is absent, empty, a comment, or if LoadImage()
+fails for any reason, efi_chainloader_check() returns silently and the
+caller continues with the normal kernel boot sequence unchanged.
+
+Signed-off-by: Minimal Linux Live <mll@example.com>
+---
+ drivers/firmware/efi/libstub/Makefile      |   1 +
+ drivers/firmware/efi/libstub/chainloader.c | 313 +++++++++++++++++++
+ drivers/firmware/efi/libstub/chainloader.h |  26 ++
+ drivers/firmware/efi/libstub/x86-stub.c   |  12 +
+ 4 files changed, 352 insertions(+)
+ create mode 100644 drivers/firmware/efi/libstub/chainloader.c
+ create mode 100644 drivers/firmware/efi/libstub/chainloader.h
+
+diff --git a/drivers/firmware/efi/libstub/Makefile b/drivers/firmware/efi/libstub/Makefile
+--- a/drivers/firmware/efi/libstub/Makefile
++++ b/drivers/firmware/efi/libstub/Makefile
+@@ -18,6 +18,7 @@ lib-y				:= efi-stub-helper.o gop.o secureboot.o tpm.o \
+ lib-$(CONFIG_EFI_GENERIC_STUB)	+= efi-stub.o smbios.o
+ lib-$(CONFIG_ARM)		+= arm32-stub.o
+ lib-$(CONFIG_ARM64)		+= arm64-stub.o kaslr.o
+ lib-$(CONFIG_X86)		+= x86-stub.o
++lib-$(CONFIG_X86)		+= chainloader.o
+ lib-$(CONFIG_RISCV)		+= riscv-stub.o
+ lib-$(CONFIG_LOONGARCH)		+= loongarch-stub.o
+
+diff --git a/drivers/firmware/efi/libstub/chainloader.h b/drivers/firmware/efi/libstub/chainloader.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/firmware/efi/libstub/chainloader.h
+@@ -0,0 +1,26 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * EFI stub chainloader — public interface.
++ *
++ * efi_chainloader_check() reads \EFI\BOOT\mll_next_boot.cfg from the
++ * EFI system partition.  If a valid target path is found the function
++ * loads and starts that EFI application; otherwise it returns and the
++ * caller continues with the normal kernel boot.
++ *
++ * Config file format (plain ASCII, one meaningful line):
++ *
++ *   \EFI\path\to\app.efi          — always chainload this target
++ *   once:\EFI\path\to\app.efi     — chainload once, then revert to normal
++ *   # ...                         — comment (ignored)
++ *   <blank line>                  — ignored
++ */
++
++#ifndef _EFI_CHAINLOADER_H
++#define _EFI_CHAINLOADER_H
++
++#include <linux/efi.h>
++
++void efi_chainloader_check(efi_handle_t handle, efi_loaded_image_t *image);
++
++#endif /* _EFI_CHAINLOADER_H */
+
+diff --git a/drivers/firmware/efi/libstub/chainloader.c b/drivers/firmware/efi/libstub/chainloader.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/firmware/efi/libstub/chainloader.c
+@@ -0,0 +1,313 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * EFI stub chainloader for Minimal Linux Live (MLL).
++ *
++ * Before the kernel boots, reads \EFI\BOOT\mll_next_boot.cfg from the
++ * EFI system partition.  If the file is present and contains a valid EFI
++ * application path, that application is loaded and started (chainloaded)
++ * instead of the kernel.
++ *
++ * Config file format (plain ASCII):
++ *
++ *   \EFI\path\to\app.efi
++ *       Always chainload this target on every boot.
++ *
++ *   once:\EFI\path\to\app.efi
++ *       Chainload this target once.  The config file is overwritten with
++ *       a comment before the target is started so that subsequent boots
++ *       return to the normal kernel boot sequence.
++ *
++ *   Lines beginning with '#' and blank lines are ignored.
++ *
++ * On any failure (missing file, parse error, LoadImage() failure) this
++ * function returns silently and the caller continues with the normal
++ * kernel boot sequence.
++ */
++
++#include <linux/efi.h>
++#include <asm/efi.h>
++#include "efistub.h"
++#include "chainloader.h"
++
++/* UTF-16 path of the configuration file on the EFI system partition. */
++#define MLL_CHAINLOADER_CFG	L"\\EFI\\BOOT\\mll_next_boot.cfg"
++
++/* "once:" prefix that enables one-shot chainloading. */
++#define MLL_ONCE_PREFIX		"once:"
++#define MLL_ONCE_PREFIX_LEN	5U
++
++/* Upper bound on the config file size that will be read (bytes). */
++#define MLL_CFG_MAX_BYTES	512UL
++
++/*
++ * EFI device-path type/sub-type constants (UEFI specification §10.3).
++ * Prefixed MLL_ to avoid collisions with any arch-specific re-definitions.
++ */
++#define MLL_DP_TYPE_MEDIA		0x04u
++#define MLL_DP_SUBTYPE_FILEPATH		0x04u
++#define MLL_DP_TYPE_END			0x7fu
++#define MLL_DP_SUBTYPE_END_ENTIRE	0xffu
++
++/* EFI_FILE_PROTOCOL open-mode flags (UEFI specification §13.5). */
++#ifndef EFI_FILE_MODE_READ
++#define EFI_FILE_MODE_READ		0x0000000000000001ULL
++#endif
++#ifndef EFI_FILE_MODE_WRITE
++#define EFI_FILE_MODE_WRITE		0x0000000000000002ULL
++#endif
++
++/**
++ * trim_ascii - Skip leading whitespace; NUL-terminate after trailing ws.
++ * @s: pointer into a NUL-terminated ASCII buffer (modified in-place).
++ *
++ * Returns a pointer into @s past any leading spaces, tabs, CR, or LF.
++ * Trailing whitespace is overwritten with NUL in-place.
++ */
++static char *trim_ascii(char *s)
++{
++	char *end;
++
++	while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n')
++		s++;
++
++	end = s + strlen(s);
++	while (end > s &&
++	       (end[-1] == ' ' || end[-1] == '\t' ||
++		end[-1] == '\r' || end[-1] == '\n'))
++		end--;
++	*end = '\0';
++
++	return s;
++}
++
++/**
++ * ascii_to_utf16 - Convert an ASCII string to a UTF-16LE string.
++ * @src: NUL-terminated ASCII source string.
++ * @dst: destination buffer of at least @max efi_char16_t elements.
++ * @max: capacity of @dst in efi_char16_t units (includes the terminator).
++ */
++static void ascii_to_utf16(const char *src, efi_char16_t *dst, size_t max)
++{
++	size_t i;
++
++	for (i = 0; i + 1 < max && src[i] != '\0'; i++)
++		dst[i] = (efi_char16_t)(unsigned char)src[i];
++	dst[i] = (efi_char16_t)'\0';
++}
++
++/**
++ * devpath_prefix_bytes - Byte length of a device path excluding its
++ *                        End-of-Hardware-Device-Path terminator node.
++ * @dp: pointer to the first node of the device path.
++ */
++static size_t devpath_prefix_bytes(const efi_device_path_protocol_t *dp)
++{
++	size_t n = 0;
++
++	while (!(dp->type == MLL_DP_TYPE_END &&
++		 dp->sub_type == MLL_DP_SUBTYPE_END_ENTIRE)) {
++		n  += dp->length;
++		dp  = (const efi_device_path_protocol_t *)
++		      ((const u8 *)dp + dp->length);
++	}
++	return n;
++}
++
++/**
++ * build_devpath - Allocate a full device path for a file on a given device.
++ *
++ * Constructs the compound path:
++ *   <device_dp> + Media-FilePath-node(@file_path) + End-of-Path-node
++ *
++ * @device_handle: EFI handle of the device that holds the target file.
++ * @file_path:     UTF-16 path to the file within that device's filesystem.
++ * @dp_out:        receives the newly allocated device path; the caller must
++ *                 free it with efi_bs_call(free_pool, *dp_out).
++ *
++ * Returns EFI_SUCCESS on success, or an EFI error code on failure.
++ */
++static efi_status_t build_devpath(efi_handle_t device_handle,
++				  const efi_char16_t *file_path,
++				  efi_device_path_protocol_t **dp_out)
++{
++	const efi_device_path_protocol_t *dev_dp = NULL;
++	efi_guid_t dp_guid = EFI_DEVICE_PATH_PROTOCOL_GUID;
++	efi_device_path_protocol_t *node;
++	efi_status_t status;
++	const efi_char16_t *p;
++	size_t dev_len, path_bytes, fp_node_size, total;
++	u8 *buf, *ptr;
++
++	/* Retrieve the device's own device path (best-effort). */
++	status = efi_bs_call(handle_protocol, device_handle,
++			     &dp_guid, (void **)&dev_dp);
++	dev_len = (status == EFI_SUCCESS && dev_dp) ?
++		  devpath_prefix_bytes(dev_dp) : 0;
++
++	/* Byte length of the UTF-16 path including its null terminator. */
++	for (p = file_path; *p; p++)
++		;
++	path_bytes   = (size_t)(p - file_path + 1) * sizeof(efi_char16_t);
++	fp_node_size = sizeof(efi_device_path_protocol_t) + path_bytes;
++	total        = dev_len + fp_node_size +
++		       sizeof(efi_device_path_protocol_t); /* end node */
++
++	status = efi_bs_call(allocate_pool, EFI_LOADER_DATA, total,
++			     (void **)&buf);
++	if (status != EFI_SUCCESS)
++		return status;
++
++	ptr = buf;
++
++	/* Copy the device portion of the path (without its end node). */
++	if (dev_len > 0) {
++		memcpy(ptr, dev_dp, dev_len);
++		ptr += dev_len;
++	}
++
++	/* Media File Path node: type = 0x04, sub-type = 0x04. */
++	node           = (efi_device_path_protocol_t *)ptr;
++	node->type     = MLL_DP_TYPE_MEDIA;
++	node->sub_type = MLL_DP_SUBTYPE_FILEPATH;
++	node->length   = (u16)fp_node_size;
++	memcpy(ptr + sizeof(efi_device_path_protocol_t), file_path, path_bytes);
++	ptr += fp_node_size;
++
++	/* End-of-Hardware-Device-Path node: type = 0x7f, sub-type = 0xff. */
++	node           = (efi_device_path_protocol_t *)ptr;
++	node->type     = MLL_DP_TYPE_END;
++	node->sub_type = MLL_DP_SUBTYPE_END_ENTIRE;
++	node->length   = sizeof(efi_device_path_protocol_t);
++
++	*dp_out = (efi_device_path_protocol_t *)buf;
++	return EFI_SUCCESS;
++}
++
++/**
++ * efi_chainloader_check() - Check for a next-boot config and chainload.
++ *
++ * Opens \EFI\BOOT\mll_next_boot.cfg on the EFI partition.  If found and
++ * non-empty, parses it as an EFI application path and loads and starts
++ * that application (chainloads it).
++ *
++ * With the "once:" prefix the config file is overwritten with a comment
++ * before StartImage() is called so that subsequent boots return to the
++ * normal kernel boot sequence.
++ *
++ * On any failure (missing file, parse error, LoadImage() failure) this
++ * function returns silently and the caller continues with the normal
++ * kernel boot.
++ *
++ * @handle: EFI handle of the currently-running EFI stub image.
++ * @image:  EFI_LOADED_IMAGE_PROTOCOL pointer for @handle.
++ */
++void efi_chainloader_check(efi_handle_t handle, efi_loaded_image_t *image)
++{
++	efi_simple_file_system_protocol_t *volume = NULL;
++	efi_file_protocol_t *root = NULL;
++	efi_file_protocol_t *cfg  = NULL;
++	efi_guid_t fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
++	efi_guid_t fi_guid = EFI_FILE_INFO_ID;
++	efi_file_info_t *fi   = NULL;
++	unsigned long fi_size = sizeof(efi_file_info_t) +
++				256 * sizeof(efi_char16_t);
++	char *cfg_buf            = NULL;
++	char *target;
++	bool one_shot            = false;
++	efi_char16_t *utf16_path = NULL;
++	efi_device_path_protocol_t *dp = NULL;
++	efi_handle_t new_handle  = NULL;
++	unsigned long exit_data_size = 0;
++	efi_char16_t *exit_data      = NULL;
++	efi_status_t status;
++	unsigned long cfg_size, read_size;
++
++	/* ----------------------------------------------------------------
++	 * 1. Open the simple file system protocol on the current device.
++	 * ---------------------------------------------------------------- */
++	status = efi_bs_call(handle_protocol, image->device_handle,
++			     &fs_guid, (void **)&volume);
++	if (status != EFI_SUCCESS)
++		return;
++
++	status = efi_call_proto(volume, open_volume, &root);
++	if (status != EFI_SUCCESS)
++		return;
++
++	/* ----------------------------------------------------------------
++	 * 2. Try to open the configuration file (read-only).
++	 * ---------------------------------------------------------------- */
++	status = efi_call_proto(root, open, &cfg,
++				(efi_char16_t *)MLL_CHAINLOADER_CFG,
++				EFI_FILE_MODE_READ, 0);
++	if (status != EFI_SUCCESS)
++		goto out_close_root;
++
++	/* ----------------------------------------------------------------
++	 * 3. Query the file size via EFI_FILE_INFO.
++	 * ---------------------------------------------------------------- */
++	status = efi_bs_call(allocate_pool, EFI_LOADER_DATA, fi_size,
++			     (void **)&fi);
++	if (status != EFI_SUCCESS)
++		goto out_close_cfg;
++
++	status = efi_call_proto(cfg, get_info, &fi_guid, &fi_size, fi);
++	if (status != EFI_SUCCESS)
++		goto out_free_fi;
++
++	cfg_size = (unsigned long)fi->file_size;
++	efi_bs_call(free_pool, fi);
++	fi = NULL;
++
++	if (cfg_size == 0 || cfg_size > MLL_CFG_MAX_BYTES)
++		goto out_close_cfg;
++
++	/* ----------------------------------------------------------------
++	 * 4. Read the file content into a heap buffer.
++	 * ---------------------------------------------------------------- */
++	status = efi_bs_call(allocate_pool, EFI_LOADER_DATA, cfg_size + 1,
++			     (void **)&cfg_buf);
++	if (status != EFI_SUCCESS)
++		goto out_close_cfg;
++
++	read_size = cfg_size;
++	status    = efi_call_proto(cfg, read, &read_size, cfg_buf);
++	if (status != EFI_SUCCESS || read_size == 0)
++		goto out_free_cfg;
++
++	cfg_buf[read_size] = '\0';
++
++	/* Scan for the first non-blank, non-comment line. */
++	target = NULL;
++	{
++		char *line = cfg_buf;
++
++		while (*line) {
++			char *eol = line;
++			char saved;
++
++			while (*eol && *eol != '\n' && *eol != '\r')
++				eol++;
++			saved = *eol;
++			*eol  = '\0';
++
++			target = trim_ascii(line);
++			if (*target != '\0' && *target != '#')
++				break;  /* found a usable line */
++
++			target = NULL;
++			*eol   = saved;
++			line   = eol;
++			if (*line == '\r') line++;
++			if (*line == '\n') line++;
++		}
++	}
++
++	if (!target || *target == '\0')
++		goto out_free_cfg;
++
++	/* ----------------------------------------------------------------
++	 * 5. Parse the optional "once:" prefix.
++	 * ---------------------------------------------------------------- */
++	if (strncmp(target, MLL_ONCE_PREFIX, MLL_ONCE_PREFIX_LEN) == 0) {
++		one_shot  = true;
++		target   += MLL_ONCE_PREFIX_LEN;
++		target    = trim_ascii(target);
++	}
++
++	if (*target == '\0')
++		goto out_free_cfg;
++
++	/* ----------------------------------------------------------------
++	 * 6. One-shot mode: overwrite the config with a comment so that
++	 *    the next boot returns to normal even if start_image() exits.
++	 * ---------------------------------------------------------------- */
++	if (one_shot) {
++		efi_file_protocol_t *cfg_rw = NULL;
++		const char invalidated[] = "# one-shot entry: already used\n";
++		unsigned long wr_size    = sizeof(invalidated) - 1;
++
++		efi_call_proto(cfg, close);
++		cfg = NULL;
++
++		status = efi_call_proto(root, open, &cfg_rw,
++					(efi_char16_t *)MLL_CHAINLOADER_CFG,
++					EFI_FILE_MODE_READ |
++					EFI_FILE_MODE_WRITE, 0);
++		if (status == EFI_SUCCESS) {
++			efi_call_proto(cfg_rw, set_position, (u64)0);
++			efi_call_proto(cfg_rw, write, &wr_size,
++				       (void *)invalidated);
++			efi_call_proto(cfg_rw, close);
++		}
++		/*
++		 * If re-opening in write mode fails (e.g. read-only media)
++		 * the "once:" prefix will be seen again on the next boot,
++		 * which is acceptable — better than skipping the chainload.
++		 */
++	}
++
++	/* ----------------------------------------------------------------
++	 * 7. Convert the ASCII target path to UTF-16.
++	 * ---------------------------------------------------------------- */
++	{
++		size_t path_len = strlen(target);
++		size_t utf16_sz = (path_len + 1) * sizeof(efi_char16_t);
++
++		status = efi_bs_call(allocate_pool, EFI_LOADER_DATA,
++				     utf16_sz, (void **)&utf16_path);
++		if (status != EFI_SUCCESS)
++			goto out_close_cfg;
++
++		ascii_to_utf16(target, utf16_path, path_len + 1);
++	}
++
++	/* ----------------------------------------------------------------
++	 * 8. Build a full device path for the target EFI image.
++	 * ---------------------------------------------------------------- */
++	status = build_devpath(image->device_handle, utf16_path, &dp);
++	if (status != EFI_SUCCESS)
++		goto out_free_utf16;
++
++	/* ----------------------------------------------------------------
++	 * 9. Load the target EFI image via firmware LoadImage().
++	 * ---------------------------------------------------------------- */
++	status = efi_bs_call(load_image, false, handle, dp,
++			     NULL, 0, &new_handle);
++	if (status != EFI_SUCCESS) {
++		efi_err("chainloader: LoadImage failed for target EFI image\n");
++		goto out_free_dp;
++	}
++
++	/* Release intermediate allocations before calling start_image(). */
++	efi_bs_call(free_pool, dp);
++	dp = NULL;
++	efi_bs_call(free_pool, utf16_path);
++	utf16_path = NULL;
++	efi_bs_call(free_pool, cfg_buf);
++	cfg_buf = NULL;
++	if (cfg) {
++		efi_call_proto(cfg, close);
++		cfg = NULL;
++	}
++	efi_call_proto(root, close);
++	root = NULL;
++
++	/* ----------------------------------------------------------------
++	 * 10. Start the target image.  On success this does not return.
++	 *     If it returns, fall through to the normal kernel boot.
++	 * ---------------------------------------------------------------- */
++	efi_info("chainloader: starting target EFI image\n");
++	efi_bs_call(start_image, new_handle, &exit_data_size, &exit_data);
++
++	/* start_image() returned — the chainloaded application exited. */
++	if (exit_data)
++		efi_bs_call(free_pool, exit_data);
++
++	return;
++
++out_free_dp:
++	efi_bs_call(free_pool, dp);
++out_free_utf16:
++	efi_bs_call(free_pool, utf16_path);
++out_free_cfg:
++	efi_bs_call(free_pool, cfg_buf);
++out_free_fi:
++	if (fi)
++		efi_bs_call(free_pool, fi);
++out_close_cfg:
++	if (cfg)
++		efi_call_proto(cfg, close);
++out_close_root:
++	if (root)
++		efi_call_proto(root, close);
++}
+
+diff --git a/drivers/firmware/efi/libstub/x86-stub.c b/drivers/firmware/efi/libstub/x86-stub.c
+--- a/drivers/firmware/efi/libstub/x86-stub.c
++++ b/drivers/firmware/efi/libstub/x86-stub.c
+@@ -12,6 +12,7 @@
+ #include <asm/efi.h>
+ #include <asm/e820/types.h>
+ #include <asm/setup.h>
++#include "chainloader.h"
+ #include "efistub.h"
+ 
+ static const struct {
+@@ -216,6 +216,14 @@ efi_status_t __efiapi efi_pe_entry(efi_handle_t handle,
+ 	if (status != EFI_SUCCESS) {
+ 		efi_err("Unable to init loaded image protocol\n");
+ 		return status;
+ 	}
+ 
++	/*
++	 * Check for a chainloader configuration before booting the kernel.
++	 * If \EFI\BOOT\mll_next_boot.cfg specifies a target EFI application,
++	 * it is loaded and started instead; otherwise boot continues normally.
++	 */
++	efi_chainloader_check(handle, image);
++
+ 	status = efi_get_cmdline(image, &cmdline_ptr, &options_size);

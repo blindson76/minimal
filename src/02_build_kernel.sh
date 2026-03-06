@@ -10,6 +10,16 @@ echo "*** BUILD KERNEL BEGIN ***"
 # Change to the kernel source directory which ls finds, e.g. 'linux-4.4.6'.
 cd `ls -d $WORK_DIR/kernel/linux-*`
 
+# Apply local patches before building.
+KERNEL_PATCHES_DIR=$SRC_DIR/kernel_patches
+if [ -d $KERNEL_PATCHES_DIR ] ; then
+  for PATCH_FILE in $KERNEL_PATCHES_DIR/*.patch ; do
+    [ -f "$PATCH_FILE" ] || continue
+    echo "Applying kernel patch '$PATCH_FILE'."
+    patch -p1 --fuzz=3 < "$PATCH_FILE"
+  done
+fi
+
 # Cleans up the kernel sources, including configuration files.
 echo "Preparing kernel work area."
 make mrproper -j $NUM_JOBS
