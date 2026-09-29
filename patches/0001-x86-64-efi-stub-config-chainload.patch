@@ -1,0 +1,214 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] x86/efi: Add optional config-file chainloading to EFI stub
+
+Add an opt-in x86_64 EFI stub feature that reads the first line of a
+configurable file from the EFI system partition containing the kernel. If
+the line names an EFI executable, load and start it before entering Linux.
+An absent or empty config file preserves the normal Linux boot path.
+
+The executable is passed to the firmware's LoadImage service so normal EFI
+image authentication policy remains in force.
+
+---
+ drivers/firmware/efi/Kconfig              | 23 ++++++
+ drivers/firmware/efi/libstub/x86-stub.c   | 147 ++++++++++++++++++++++++++++++
+ 2 files changed, 170 insertions(+)
+
+diff --git a/drivers/firmware/efi/Kconfig b/drivers/firmware/efi/Kconfig
+index 72f2537d90ca..000000000000 100644
+--- a/drivers/firmware/efi/Kconfig
++++ b/drivers/firmware/efi/Kconfig
+@@ -37,5 +37,28 @@ config EFI_GENERIC_STUB
+ 	bool
+ 
++config EFI_STUB_CHAINLOAD
++	bool "Enable EFI stub config-file chainloading"
++	depends on EFI_STUB && X86_64
++	help
++	  Before booting Linux, look for a chainload configuration file on
++	  the EFI system partition from which the kernel was loaded. If its
++	  first line contains an EFI executable path, the stub loads and
++	  starts that executable instead of booting Linux.
++
++	  If the file is missing or its first line is empty, Linux boots
++	  normally. If a configured executable cannot be loaded or started,
++	  the EFI stub exits with the resulting error instead of silently
++	  booting Linux.
++
++config EFI_STUB_CHAINLOAD_CONFIG
++	string "EFI stub chainload configuration file"
++	depends on EFI_STUB_CHAINLOAD
++	default "/EFI/BOOT/boot.conf"
++	help
++	  Path, relative to the root of the EFI system partition, of the
++	  configuration file. Its first line must contain the absolute
++	  EFI path of the executable to start, using ASCII characters.
++
+ config EFI_ZBOOT
+ 	bool "Enable the generic EFI decompressor"
+ 	depends on EFI_GENERIC_STUB && !ARM
+diff --git a/drivers/firmware/efi/libstub/x86-stub.c b/drivers/firmware/efi/libstub/x86-stub.c
+index 99429bc4b0c7..000000000000 100644
+--- a/drivers/firmware/efi/libstub/x86-stub.c
++++ b/drivers/firmware/efi/libstub/x86-stub.c
+@@ -21,6 +21,143 @@
+ #include "efistub.h"
+ #include "x86-stub.h"
+ 
++#ifdef CONFIG_EFI_STUB_CHAINLOAD
++#define EFI_CHAINLOAD_CONFIG		L"" CONFIG_EFI_STUB_CHAINLOAD_CONFIG
++#define EFI_CHAINLOAD_PATH_MAX		256
++#define EFI_CHAINLOAD_IMAGE_MAX		(64UL * 1024 * 1024)
++
++/*
++ * Read one ASCII EFI path from the configured file on the same filesystem
++ * as the kernel. Set @configured once a usable path is found, so a broken
++ * configured target cannot accidentally fall through to the Linux boot.
++ */
++static efi_status_t efi_stub_chainload(efi_handle_t handle,
++				       efi_loaded_image_t *image,
++				       bool *configured)
++{
++	struct {
++		efi_file_info_t info;
++		efi_char16_t filename[EFI_CHAINLOAD_PATH_MAX];
++	} file_info;
++	efi_guid_t fs_guid = EFI_FILE_SYSTEM_GUID;
++	efi_guid_t info_guid = EFI_FILE_INFO_ID;
++	efi_simple_file_system_protocol_t *fs;
++	efi_file_protocol_t *volume, *file;
++	efi_char16_t config_path[] = EFI_CHAINLOAD_CONFIG;
++	efi_char16_t target[EFI_CHAINLOAD_PATH_MAX];
++	efi_handle_t child;
++	void *image_buffer;
++	char config[EFI_CHAINLOAD_PATH_MAX];
++	unsigned long config_size = sizeof(config) - 1;
++	unsigned long info_size = sizeof(file_info);
++	unsigned long image_size, remaining;
++	efi_status_t status;
++	int i;
++
++	*configured = false;
++	status = efi_bs_call(handle_protocol,
++			     efi_table_attr(image, device_handle),
++			     &fs_guid, (void **)&fs);
++	if (status != EFI_SUCCESS)
++		return EFI_NOT_FOUND;
++
++	status = efi_call_proto(fs, open_volume, &volume);
++	if (status != EFI_SUCCESS)
++		return EFI_NOT_FOUND;
++
++	for (i = 0; config_path[i]; i++)
++		if (config_path[i] == '/')
++			config_path[i] = '\\';
++	status = efi_call_proto(volume, open, &file, config_path,
++				EFI_FILE_MODE_READ, 0);
++	if (status != EFI_SUCCESS) {
++		efi_call_proto(volume, close);
++		return EFI_NOT_FOUND;
++	}
++
++	status = efi_call_proto(file, read, &config_size, config);
++	efi_call_proto(file, close);
++	if (status != EFI_SUCCESS || !config_size ||
++	    config_size >= sizeof(config) - 1) {
++		efi_call_proto(volume, close);
++		return EFI_NOT_FOUND;
++	}
++
++	for (i = 0; i < config_size && config[i] != '\r' &&
++	     config[i] != '\n'; i++) {
++		if (i >= EFI_CHAINLOAD_PATH_MAX - 1 || config[i] < 0x21 ||
++		    config[i] > 0x7e) {
++			efi_call_proto(volume, close);
++			return EFI_NOT_FOUND;
++		}
++		target[i] = config[i] == '/' ? '\\' : config[i];
++	}
++	if (!i || (target[0] != '/' && target[0] != '\\')) {
++		efi_call_proto(volume, close);
++		return EFI_NOT_FOUND;
++	}
++	target[i] = L'\0';
++	*configured = true;
++
++	status = efi_call_proto(volume, open, &file, target,
++				EFI_FILE_MODE_READ, 0);
++	if (status != EFI_SUCCESS)
++		goto out_close_volume;
++
++	status = efi_call_proto(file, get_info, &info_guid, &info_size,
++				&file_info);
++	if (status != EFI_SUCCESS)
++		goto out_close_file;
++
++	image_size = file_info.info.file_size;
++	if (!image_size || image_size > EFI_CHAINLOAD_IMAGE_MAX ||
++	    image_size > ULONG_MAX) {
++		status = EFI_BAD_BUFFER_SIZE;
++		goto out_close_file;
++	}
++
++	status = efi_bs_call(allocate_pool, EFI_LOADER_DATA, image_size,
++			     &image_buffer);
++	if (status != EFI_SUCCESS)
++		goto out_close_file;
++
++	remaining = image_size;
++	while (remaining) {
++		unsigned long size = remaining;
++
++		status = efi_call_proto(file, read, &size,
++					(u8 *)image_buffer + image_size - remaining);
++		if (status != EFI_SUCCESS || !size || size > remaining) {
++			if (status == EFI_SUCCESS)
++				status = EFI_LOAD_ERROR;
++			efi_bs_call(free_pool, image_buffer);
++			goto out_close_file;
++		}
++		remaining -= size;
++	}
++
++	efi_call_proto(file, close);
++	efi_call_proto(volume, close);
++
++	status = efi_bs_call(load_image, false, handle, NULL, image_buffer,
++			     image_size, &child);
++	efi_bs_call(free_pool, image_buffer);
++	if (status != EFI_SUCCESS)
++		return status;
++
++	status = efi_bs_call(start_image, child, NULL, NULL);
++	if (status != EFI_SUCCESS)
++		efi_bs_call(unload_image, child);
++	return status;
++
++out_close_file:
++	efi_call_proto(file, close);
++out_close_volume:
++	efi_call_proto(volume, close);
++	return status;
++}
++#endif
++
+ const efi_system_table_t *efi_system_table;
+ const efi_dxe_services_table_t *efi_dxe_table;
+ static efi_loaded_image_t *image = NULL;
+@@ -477,6 +614,16 @@
+ 		efi_exit(handle, status);
+ 	}
+ 
++#ifdef CONFIG_EFI_STUB_CHAINLOAD
++	{
++		bool configured;
++
++		status = efi_stub_chainload(handle, image, &configured);
++		if (configured)
++			efi_exit(handle, status);
++	}
++#endif
++
+ 	/* Assign the setup_header fields that the kernel actually cares about */
+ 	hdr->root_flags	= 1;
+ 	hdr->vid_mode	= 0xffff;
