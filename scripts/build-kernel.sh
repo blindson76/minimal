@@ -26,10 +26,12 @@ if [[ "${version}" != "6.8.0" ]]; then
 	exit 1
 fi
 
-if git -C "${kernel_src}" apply --check "${patch_file}"; then
-	git -C "${kernel_src}" apply "${patch_file}"
-elif git -C "${kernel_src}" apply --reverse --check "${patch_file}"; then
+if grep -q '^config EFI_STUB_CHAINLOAD$' "${kernel_src}/drivers/firmware/efi/Kconfig" &&
+	grep -q '^static efi_status_t efi_stub_chainload' \
+		"${kernel_src}/drivers/firmware/efi/libstub/x86-stub.c"; then
 	echo "EFI chainload patch is already applied"
+elif git -C "${kernel_src}" apply --check "${patch_file}"; then
+	git -C "${kernel_src}" apply "${patch_file}"
 else
 	echo "EFI chainload patch does not apply to ${kernel_src}" >&2
 	exit 1
